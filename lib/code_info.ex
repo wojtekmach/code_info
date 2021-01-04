@@ -68,7 +68,6 @@ defmodule CodeInfo do
         }
 
         map = filter(map, filter[:types])
-
         {{name, arity}, map}
       end
 
@@ -91,17 +90,14 @@ defmodule CodeInfo do
               nil
           end
 
-        map =
-          filter(
-            %{
-              doc: doc,
-              doc_metadata: metadata,
-              signature: signature,
-              spec_strings: spec_strings
-            },
-            filter[:functions]
-          )
+        map = %{
+          doc: doc,
+          doc_metadata: metadata,
+          signature: signature,
+          spec_strings: spec_strings
+        }
 
+        map = filter(map, filter[:functions])
         {{name, arity}, map}
       end
 
