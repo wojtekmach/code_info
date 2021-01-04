@@ -2,6 +2,12 @@ defmodule CodeInfoTest do
   use ExUnit.Case, async: true
 
   test "it works" do
-    IO.inspect(CodeInfo.info(Version), printable_limit: 50)
+    info =
+      CodeInfo.fetch(
+        Version,
+        [:doc, functions: [:signature], types: [:spec_string]]
+      )
+
+    IO.inspect(info, printable_limit: 50)
   end
 end
