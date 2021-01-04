@@ -1,4 +1,8 @@
 defmodule CodeInfo do
+  @moduledoc """
+  Functions for fetching module information.
+  """
+
   @doc """
   Fetch info about a given module.
 
@@ -33,6 +37,7 @@ defmodule CodeInfo do
       }
 
   """
+  @spec fetch(module(), [atom() | {atom(), [atom()] | :*}]) :: map()
   def fetch(module, filter \\ []) do
     {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} = Code.fetch_docs(module)
 
