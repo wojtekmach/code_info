@@ -1,16 +1,16 @@
 defmodule CodeInfo do
   @moduledoc """
-  Functions for fetching module information.
+  Functions for getting information about modules.
   """
 
   @doc """
-  Fetch info about a given module.
+  Get info about a given module.
 
   ## Examples
 
   Get all info:
 
-      CodeInfo.fetch(Version)
+      CodeInfo.get(Version)
       %{
         doc: %{
           "en" => "Functions for parsing and matching versions against requirements." <> _
@@ -23,7 +23,7 @@ defmodule CodeInfo do
 
   Get just module doc and function signatures:
 
-      CodeInfo.fetch(Version, [:doc, functions: [:signatures]])
+      CodeInfo.get(Version, [:doc, functions: [:signatures]])
       %{
         doc: %{
           "en" => "Functions for parsing and matching versions against requirements." <> _,
@@ -37,8 +37,8 @@ defmodule CodeInfo do
       }
 
   """
-  @spec fetch(module(), [atom() | {atom(), [atom()] | :*}]) :: map()
-  def fetch(module, filter \\ []) do
+  @spec get(module(), [atom() | {atom(), [atom()] | :*}]) :: map()
+  def get(module, filter \\ []) do
     {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} = Code.fetch_docs(module)
 
     {:ok, types} = Code.Typespec.fetch_types(module)

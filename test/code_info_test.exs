@@ -1,9 +1,9 @@
 defmodule CodeInfoTest do
   use ExUnit.Case, async: true
 
-  test "it works" do
+  test "get/2" do
     info =
-      CodeInfo.fetch(
+      CodeInfo.get(
         Version,
         [:doc, functions: [:signature], types: [:spec_string]]
       )
