@@ -37,8 +37,8 @@ defmodule CodeInfo do
       }
 
   """
-  @spec get(module(), [atom() | {atom(), [atom()] | :*}]) :: map()
-  def get(module, filter \\ []) do
+  @spec get(module(), filter) :: map() when filter: :* | [atom() | {atom(), filter}]
+  def get(module, filter \\ :*) do
     {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} = Code.fetch_docs(module)
 
     {:ok, types} = Code.Typespec.fetch_types(module)
@@ -80,7 +80,7 @@ defmodule CodeInfo do
               spec_string: spec_string
             }
 
-            put_in(acc, [:types, {name, arity}], filter(map, filter[:types]))
+            put_in(acc, [:types, {name, arity}], map)
 
           :callback ->
             spec_strings =
@@ -96,7 +96,7 @@ defmodule CodeInfo do
               spec_strings: spec_strings
             }
 
-            put_in(acc, [:callbacks, {name, arity}], filter(map, filter[:callbacks]))
+            put_in(acc, [:callbacks, {name, arity}], map)
 
           :macrocallback ->
             spec_strings =
@@ -112,7 +112,7 @@ defmodule CodeInfo do
               spec_strings: spec_strings
             }
 
-            put_in(acc, [:macrocallbacks, {name, arity}], filter(map, filter[:macrocallbacks]))
+            put_in(acc, [:macrocallbacks, {name, arity}], map)
 
           :function ->
             spec_strings =
@@ -128,7 +128,7 @@ defmodule CodeInfo do
               spec_strings: spec_strings
             }
 
-            put_in(acc, [:functions, {name, arity}], filter(map, filter[:functions]))
+            put_in(acc, [:functions, {name, arity}], map)
 
           :macro ->
             spec_strings =
@@ -144,7 +144,7 @@ defmodule CodeInfo do
               spec_strings: spec_strings
             }
 
-            put_in(acc, [:macros, {name, arity}], filter(map, filter[:macros]))
+            put_in(acc, [:macros, {name, arity}], map)
 
           _ ->
             acc
@@ -164,7 +164,6 @@ defmodule CodeInfo do
           spec_string: spec_string
         }
 
-        map = filter(map, filter[:types])
         {{name, arity}, map}
       end
 
@@ -173,31 +172,27 @@ defmodule CodeInfo do
         put_in(acc, [:types, {name, arity}], map)
       end)
 
-    top_filter(state, filter)
+    filter(state, filter)
   end
 
-  defp top_filter(thing, filter) do
-    if filter != [] do
-      keys =
-        Enum.map(filter, fn
-          key when is_atom(key) ->
-            key
-
-          {key, _} when is_atom(key) ->
-            key
-        end)
-
-      Map.take(thing, keys)
-    else
-      thing
-    end
+  defp filter(map, :*) do
+    map
   end
 
-  defp filter(thing, filter) do
-    if filter && filter != :* do
-      Map.take(thing, filter)
-    else
-      thing
+  defp filter(map, filter) when is_list(filter) do
+    for item <- filter, into: %{} do
+      case item do
+        key when is_atom(key) ->
+          {key, Map.fetch!(map, key)}
+
+        {key, filter} when is_atom(key) ->
+          map =
+            for {key, val} <- Map.fetch!(map, key), into: %{} do
+              {key, filter(val, filter)}
+            end
+
+          {key, map}
+      end
     end
   end
 
