@@ -23,7 +23,7 @@ defmodule CodeInfo do
 
   Get just module doc and function signatures:
 
-      CodeInfo.get(Version, [:doc, functions: [:signatures]])
+      CodeInfo.get(Version, [:doc, functions: [:signature]])
       %{
         doc: %{
           "en" => "Functions for parsing and matching versions against requirements." <> _,
