@@ -20,6 +20,8 @@ defmodule CodeInfoTest do
       @doc "macrocallback1 docs"
       @macrocallback macrocallback1() :: :ok
 
+      @macrocallback macrocallback2(t) :: [t] when t: term()
+
       @doc "function1 docs"
       @doc since: "1.0.0"
       @spec function1() :: :ok
@@ -75,8 +77,14 @@ defmodule CodeInfoTest do
              doc: %{"en" => "macrocallback1 docs"},
              doc_metadata: %{},
              signature: [],
-             # TODO: remove macro first arg
-             spec_strings: ["macrocallback1(term()) :: :ok"]
+             spec_strings: ["macrocallback1() :: :ok"]
+           }
+
+    assert Map.fetch!(info.macrocallbacks, {:macrocallback2, 1}) == %{
+             doc: %{},
+             doc_metadata: %{},
+             signature: [],
+             spec_strings: ["macrocallback2(t) :: [t] when t: term()"]
            }
 
     assert Map.fetch!(info.functions, {:function1, 0}) == %{
@@ -90,8 +98,7 @@ defmodule CodeInfoTest do
              doc: %{"en" => "macro1 docs"},
              doc_metadata: %{},
              signature: ["macro1()"],
-             # TODO: remove macro first arg
-             spec_strings: ["macro1(term()) :: :ok"]
+             spec_strings: ["macro1() :: :ok"]
            }
   end
 

@@ -101,7 +101,7 @@ defmodule CodeInfo do
           :macrocallback ->
             spec_strings =
               case Map.fetch(callbacks, {:"MACRO-#{name}", arity + 1}) do
-                {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
+                {:ok, specs} -> Enum.map(specs, &macro_spec_to_string(&1, name))
                 :error -> []
               end
 
@@ -133,7 +133,7 @@ defmodule CodeInfo do
           :macro ->
             spec_strings =
               case Map.fetch(specs, {:"MACRO-#{name}", arity + 1}) do
-                {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
+                {:ok, specs} -> Enum.map(specs, &macro_spec_to_string(&1, name))
                 :error -> []
               end
 
@@ -205,7 +205,19 @@ defmodule CodeInfo do
     name |> Code.Typespec.spec_to_quoted(spec) |> Macro.to_string()
   end
 
+  defp macro_spec_to_string(spec, name) do
+    name |> Code.Typespec.spec_to_quoted(spec) |> remove_first_macro_arg() |> Macro.to_string()
+  end
+
   defp type_spec_to_string(spec) do
     spec |> Code.Typespec.type_to_quoted() |> Macro.to_string()
+  end
+
+  defp remove_first_macro_arg({:"::", info, [{name, info2, [_term_arg | rest_args]}, return]}) do
+    {:"::", info, [{name, info2, rest_args}, return]}
+  end
+
+  defp remove_first_macro_arg({:when, meta, [lhs, rhs]}) do
+    {:when, meta, [remove_first_macro_arg(lhs), rhs]}
   end
 end
