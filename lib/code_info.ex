@@ -48,18 +48,22 @@ defmodule CodeInfo do
         when filter: :* | [atom() | {atom(), filter}]
   def fetch(module, filter \\ :*) do
     case Code.fetch_docs(module) do
-      {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} ->
-        {:ok, fetch(module, doc, metadata, docs, filter)}
+      {:docs_v1, _anno, language, _content_type, doc, metadata, docs} ->
+        {:ok, fetch(module, language(language), doc, metadata, docs, filter)}
 
       {:error, :chunk_not_found} ->
-        {:ok, fetch(module, :none, %{}, [], filter)}
+        language = CodeInfo.Language.Erlang
+        {:ok, fetch(module, language, :none, %{}, [], filter)}
 
       {:error, _} = error ->
         error
     end
   end
 
-  defp fetch(module, doc, metadata, docs, filter) do
+  defp language(:elixir), do: CodeInfo.Language.Elixir
+  defp language(:erlang), do: CodeInfo.Language.Erlang
+
+  defp fetch(module, language, doc, metadata, docs, filter) do
     types = fetch_types(module)
     specs = fetch_specs(module)
     callbacks = fetch_callbacks(module)
@@ -78,17 +82,17 @@ defmodule CodeInfo do
       Enum.reduce(docs, state, fn {{kind, name, arity}, _anno, signature, doc, metadata}, acc ->
         case kind do
           :type ->
-            map = type(types, name, arity, doc, metadata, signature)
+            map = type(types, language, name, arity, doc, metadata, signature)
             put_in(acc, [:types, {name, arity}], map)
 
           :callback ->
-            map = callback(callbacks, name, arity, doc, metadata, signature)
+            map = callback(callbacks, language, name, arity, doc, metadata, signature)
             put_in(acc, [:callbacks, {name, arity}], map)
 
           :macrocallback ->
             spec_strings =
               case Map.fetch(callbacks, {:"MACRO-#{name}", arity + 1}) do
-                {:ok, specs} -> Enum.map(specs, &macro_spec_to_string(&1, name))
+                {:ok, specs} -> Enum.map(specs, &language.spec_to_string(&1, :macro, name, arity))
                 :error -> []
               end
 
@@ -104,8 +108,11 @@ defmodule CodeInfo do
           :function ->
             spec_strings =
               case Map.fetch(specs, {name, arity}) do
-                {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
-                :error -> []
+                {:ok, specs} ->
+                  Enum.map(specs, &language.spec_to_string(&1, :function, name, arity))
+
+                :error ->
+                  []
               end
 
             map = %{
@@ -120,7 +127,7 @@ defmodule CodeInfo do
           :macro ->
             spec_strings =
               case Map.fetch(specs, {:"MACRO-#{name}", arity + 1}) do
-                {:ok, specs} -> Enum.map(specs, &macro_spec_to_string(&1, name))
+                {:ok, specs} -> Enum.map(specs, &language.spec_to_string(&1, :macro, name, arity))
                 :error -> []
               end
 
@@ -139,9 +146,9 @@ defmodule CodeInfo do
       end)
 
     state
-    |> put_missing_types(types)
-    |> put_missing_callbacks(callbacks)
-    |> put_missing_functions(module, specs)
+    |> put_missing_types(language, types)
+    |> put_missing_callbacks(language, callbacks)
+    |> put_missing_functions(language, module, specs)
     |> filter(filter)
   end
 
@@ -198,17 +205,17 @@ defmodule CodeInfo do
   # - Elixir doesn't put @typep into docs chunk
   # - xml_from_edoc + docgen_xml_to_chunk doesn't put types into chunk
   # - module may not have Docs chunk at all
-  defp put_missing_types(state, types) do
+  defp put_missing_types(state, language, types) do
     types =
       Enum.reduce(Map.keys(types), state.types, fn {name, arity}, acc ->
-        map = type(types, name, arity, :none, %{}, [])
+        map = type(types, language, name, arity, :none, %{}, [])
         Map.put_new(acc, {name, arity}, map)
       end)
 
     put_in(state.types, types)
   end
 
-  defp type(types, name, arity, doc, doc_metadata, signature) do
+  defp type(types, language, name, arity, doc, doc_metadata, signature) do
     {kind, spec} = Map.fetch!(types, {name, arity})
 
     %{
@@ -216,7 +223,7 @@ defmodule CodeInfo do
       doc: doc,
       doc_metadata: doc_metadata,
       signature: signature,
-      spec_string: type_spec_to_string(spec)
+      spec_string: language.spec_to_string(spec, :type, name, arity)
     }
   end
 
@@ -224,20 +231,20 @@ defmodule CodeInfo do
   #
   # - xml_from_edoc + docgen_xml_to_chunk doesn't put callbacks into chunk.
   # - module may not have Docs chunk at all
-  defp put_missing_callbacks(state, callbacks) do
+  defp put_missing_callbacks(state, language, callbacks) do
     callbacks =
       Enum.reduce(Map.keys(callbacks), state.callbacks, fn {name, arity}, acc ->
-        map = callback(callbacks, name, arity, :none, %{}, [])
+        map = callback(callbacks, language, name, arity, :none, %{}, [])
         Map.put_new(acc, {name, arity}, map)
       end)
 
     put_in(state.callbacks, callbacks)
   end
 
-  defp callback(callbacks, name, arity, doc, doc_metadata, signature) do
+  defp callback(callbacks, language, name, arity, doc, doc_metadata, signature) do
     spec_strings =
       case Map.fetch(callbacks, {name, arity}) do
-        {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
+        {:ok, specs} -> Enum.map(specs, &language.spec_to_string(&1, :callback, name, arity))
         :error -> []
       end
 
@@ -252,27 +259,14 @@ defmodule CodeInfo do
   # Add functions that are not in the Docs chunk. 
   #
   # - module may not have Docs chunk at all
-  defp put_missing_functions(state, module, specs) do
-    functions =
-      if function_exported?(module, :__info__, 1) do
-        # elixir_module.module_info(:exports) contains macros
-        module.__info__(:functions)
-      else
-        functions_added_by_the_compiler = [
-          {:behaviour_info, 1},
-          {:module_info, 0},
-          {:module_info, 1},
-          {:record_info, 2}
-        ]
-
-        module.module_info(:exports) -- functions_added_by_the_compiler
-      end
+  defp put_missing_functions(state, language, module, specs) do
+    functions = language.functions(module)
 
     functions =
       Enum.reduce(functions, state.functions, fn {name, arity}, acc ->
         spec_strings =
           case Map.fetch(specs, {name, arity}) do
-            {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
+            {:ok, specs} -> Enum.map(specs, &language.spec_to_string(&1, :function, name, arity))
             :error -> []
           end
 
@@ -287,25 +281,5 @@ defmodule CodeInfo do
       end)
 
     put_in(state.functions, functions)
-  end
-
-  defp function_spec_to_string(spec, name) do
-    name |> Code.Typespec.spec_to_quoted(spec) |> Macro.to_string()
-  end
-
-  defp macro_spec_to_string(spec, name) do
-    name |> Code.Typespec.spec_to_quoted(spec) |> remove_first_macro_arg() |> Macro.to_string()
-  end
-
-  defp type_spec_to_string(spec) do
-    spec |> Code.Typespec.type_to_quoted() |> Macro.to_string()
-  end
-
-  defp remove_first_macro_arg({:"::", info, [{name, info2, [_term_arg | rest_args]}, return]}) do
-    {:"::", info, [{name, info2, rest_args}, return]}
-  end
-
-  defp remove_first_macro_arg({:when, meta, [lhs, rhs]}) do
-    {:when, meta, [remove_first_macro_arg(lhs), rhs]}
   end
 end

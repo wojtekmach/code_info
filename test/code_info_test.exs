@@ -147,7 +147,7 @@ defmodule CodeInfoTest do
                doc_metadata: %{},
                kind: :type,
                signature: [],
-               spec_string: "type1() :: atom()"
+               spec_string: "-type type1() :: atom()."
              }
            }
 
@@ -156,7 +156,7 @@ defmodule CodeInfoTest do
                doc: :none,
                doc_metadata: %{},
                signature: [],
-               spec_strings: ["callback1() :: atom()"]
+               spec_strings: ["-callback callback1() -> atom()."]
              }
            }
 
@@ -164,7 +164,7 @@ defmodule CodeInfoTest do
              doc: %{"en" => [{:a, [id: "function1-0"], []}, {:p, [], ["function1 docs."]}]},
              doc_metadata: %{},
              signature: ["function1() -> atom()"],
-             spec_strings: ["function1() :: atom()"]
+             spec_strings: ["-spec function1() -> atom()."]
            }
   end
 
@@ -192,7 +192,7 @@ defmodule CodeInfoTest do
                    doc: :none,
                    doc_metadata: %{},
                    signature: [],
-                   spec_strings: ["callback1() :: atom()"]
+                   spec_strings: ["-callback callback1() -> atom()."]
                  }
                },
                doc: :none,
@@ -202,7 +202,7 @@ defmodule CodeInfoTest do
                    doc: :hidden,
                    doc_metadata: %{},
                    signature: [],
-                   spec_strings: ["function1() :: atom()"]
+                   spec_strings: ["-spec function1() -> atom()."]
                  }
                },
                macrocallbacks: %{},
@@ -213,7 +213,7 @@ defmodule CodeInfoTest do
                    doc_metadata: %{},
                    kind: :type,
                    signature: [],
-                   spec_string: "type1() :: atom()"
+                   spec_string: "-type type1() :: atom()."
                  }
                }
              }
