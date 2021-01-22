@@ -18,6 +18,8 @@ defmodule CodeInfo.MixProject do
   end
 
   defp deps do
-    []
+    [
+      {:earmark_parser, "~> 1.4"}
+    ]
   end
 end
