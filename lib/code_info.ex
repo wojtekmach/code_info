@@ -228,6 +228,7 @@ defmodule CodeInfo do
       doc: doc,
       doc_metadata: doc_metadata,
       signature: signature,
+      spec_ast: spec,
       spec_string: language.spec_to_string(spec, :type, name, arity)
     }
   end

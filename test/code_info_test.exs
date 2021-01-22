@@ -55,6 +55,7 @@ defmodule CodeInfoTest do
              doc: %{"en" => "type1 docs"},
              doc_metadata: %{},
              signature: [],
+             spec_ast: {:type1, {:type, 5, :integer, []}, []},
              spec_string: "type1() :: integer()"
            }
 
@@ -63,6 +64,7 @@ defmodule CodeInfoTest do
              doc: %{"en" => "opaque1 docs"},
              doc_metadata: %{opaque: true},
              signature: [],
+             spec_ast: {:opaque1, {:user_type, 8, :typep1, []}, []},
              spec_string: "opaque1() :: typep1()"
            }
 
@@ -71,6 +73,7 @@ defmodule CodeInfoTest do
              doc: :none,
              doc_metadata: %{},
              signature: [],
+             spec_ast: {:typep1, {:type, 10, :integer, []}, []},
              spec_string: "typep1() :: integer()"
            }
 
@@ -172,6 +175,7 @@ defmodule CodeInfoTest do
                doc_metadata: %{},
                kind: :type,
                signature: [],
+               spec_ast: {:type1, {:type, 6, :atom, []}, []},
                spec_string: "-type type1() :: atom()."
              }
            }
@@ -256,6 +260,7 @@ defmodule CodeInfoTest do
                    doc_metadata: %{},
                    kind: :type,
                    signature: [],
+                   spec_ast: {:type1, {:type, 5, :atom, []}, []},
                    spec_string: "-type type1() :: atom()."
                  }
                }
