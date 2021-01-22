@@ -39,7 +39,14 @@ defmodule CodeInfo do
   """
   @spec get(module(), filter) :: map() when filter: :* | [atom() | {atom(), filter}]
   def get(module, filter \\ :*) do
-    {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} = Code.fetch_docs(module)
+    {doc, metadata, docs} =
+      case Code.fetch_docs(module) do
+        {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} ->
+          {doc, metadata, docs}
+
+        {:error, :chunk_not_found} ->
+          {:none, %{}, []}
+      end
 
     types = fetch_types(module)
     specs = fetch_specs(module)
@@ -122,6 +129,7 @@ defmodule CodeInfo do
     state
     |> put_missing_types(types)
     |> put_missing_callbacks(callbacks)
+    |> put_missing_functions(module, specs)
     |> filter(filter)
   end
 
@@ -175,7 +183,6 @@ defmodule CodeInfo do
 
   # Add types that are in Dbgi chunk but not in Docs chunk.
   #
-  # There can be few reasons for this discrepancy:
   # - Elixir doesn't put @typep into docs chunk
   # - xml_from_edoc + docgen_xml_to_chunk doesn't put types into chunk
   # - module may not have Docs chunk at all
@@ -201,7 +208,10 @@ defmodule CodeInfo do
     }
   end
 
-  # Add callbacks that are in Dbgi chunk but not in Docs chunk (for edoc)
+  # Add callbacks that are in Dbgi chunk but not in Docs chunk.
+  #
+  # - xml_from_edoc + docgen_xml_to_chunk doesn't put callbacks into chunk.
+  # - module may not have Docs chunk at all
   defp put_missing_callbacks(state, callbacks) do
     callbacks =
       Enum.reduce(Map.keys(callbacks), state.callbacks, fn {name, arity}, acc ->
@@ -225,6 +235,46 @@ defmodule CodeInfo do
       signature: signature,
       spec_strings: spec_strings
     }
+  end
+
+  # Add functions that are not in the Docs chunk. 
+  #
+  # - module may not have Docs chunk at all
+  defp put_missing_functions(state, module, specs) do
+    functions =
+      if Code.ensure_loaded?(module) and function_exported?(module, :__info__, 1) do
+        # elixir_module.module_info(:exports) contains macros
+        module.__info__(:functions)
+      else
+        functions_added_by_the_compiler = [
+          {:behaviour_info, 1},
+          {:module_info, 0},
+          {:module_info, 1},
+          {:record_info, 2}
+        ]
+
+        module.module_info(:exports) -- functions_added_by_the_compiler
+      end
+
+    functions =
+      Enum.reduce(functions, state.functions, fn {name, arity}, acc ->
+        spec_strings =
+          case Map.fetch(specs, {name, arity}) do
+            {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
+            :error -> []
+          end
+
+        map = %{
+          doc: :hidden,
+          doc_metadata: %{},
+          signature: [],
+          spec_strings: spec_strings
+        }
+
+        Map.put_new(acc, {name, arity}, map)
+      end)
+
+    put_in(state.functions, functions)
   end
 
   defp function_spec_to_string(spec, name) do

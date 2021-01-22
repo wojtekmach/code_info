@@ -114,6 +114,8 @@ defmodule CodeInfoTest do
 
     -callback callback1() -> atom().
 
+    -record(record1, {field1, field2}).
+
     %% @doc function1 docs.
     -spec function1() -> atom().
     function1() ->
@@ -164,6 +166,57 @@ defmodule CodeInfoTest do
              signature: ["function1() -> atom()"],
              spec_strings: ["function1() :: atom()"]
            }
+  end
+
+  test "get/2: Erlang module without chunk" do
+    erlc(:module2, ~S"""
+    -module(module2).
+    -export([function1/0]).
+    -export_type([type1/0]).
+
+    -type type1() :: atom().
+
+    -callback callback1() -> atom().
+
+    -spec function1() -> atom().
+    function1() ->
+      ok.
+    """)
+
+    info = CodeInfo.get(:module2)
+
+    assert info ==
+             %{
+               callbacks: %{
+                 {:callback1, 0} => %{
+                   doc: :none,
+                   doc_metadata: %{},
+                   signature: [],
+                   spec_strings: ["callback1() :: atom()"]
+                 }
+               },
+               doc: :none,
+               doc_metadata: %{},
+               functions: %{
+                 {:function1, 0} => %{
+                   doc: :hidden,
+                   doc_metadata: %{},
+                   signature: [],
+                   spec_strings: ["function1() :: atom()"]
+                 }
+               },
+               macrocallbacks: %{},
+               macros: %{},
+               types: %{
+                 {:type1, 0} => %{
+                   doc: :none,
+                   doc_metadata: %{},
+                   kind: :type,
+                   signature: [],
+                   spec_string: "type1() :: atom()"
+                 }
+               }
+             }
   end
 
   defp elixirc(code) do
