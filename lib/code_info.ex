@@ -48,12 +48,16 @@ defmodule CodeInfo do
         when filter: :* | [atom() | {atom(), filter}]
   def fetch(module, filter \\ :*) do
     case Code.fetch_docs(module) do
-      {:docs_v1, _anno, language, _content_type, doc, metadata, docs} ->
-        {:ok, fetch(module, language(language), doc, metadata, docs, filter)}
+      {:docs_v1, _anno, language, doc_format, doc, doc_metadata, docs} ->
+        {:ok, fetch(module, language(language), doc_format, doc, doc_metadata, docs, filter)}
 
       {:error, :chunk_not_found} ->
         language = CodeInfo.Language.Erlang
-        {:ok, fetch(module, language, :none, %{}, [], filter)}
+        doc_format = nil
+        doc = :none
+        doc_metadata = %{}
+        docs = %{}
+        {:ok, fetch(module, language, doc_format, doc, doc_metadata, docs, filter)}
 
       {:error, _} = error ->
         error
@@ -63,7 +67,7 @@ defmodule CodeInfo do
   defp language(:elixir), do: CodeInfo.Language.Elixir
   defp language(:erlang), do: CodeInfo.Language.Erlang
 
-  defp fetch(module, language, doc, metadata, docs, filter) do
+  defp fetch(module, language, doc_format, doc, doc_metadata, docs, filter) do
     types = fetch_types(module)
     specs = fetch_specs(module)
     callbacks = fetch_callbacks(module)
@@ -75,7 +79,8 @@ defmodule CodeInfo do
       functions: %{},
       macros: %{},
       doc: doc,
-      doc_metadata: metadata
+      doc_format: doc_format,
+      doc_metadata: doc_metadata
     }
 
     state =

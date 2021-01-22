@@ -47,6 +47,7 @@ defmodule CodeInfoTest do
     {:ok, info} = CodeInfo.fetch(M)
 
     assert info.doc == %{"en" => "M docs"}
+    assert info.doc_format == "text/markdown"
     assert info.doc_metadata == %{}
 
     assert Map.fetch!(info.types, {:type1, 0}) == %{
@@ -161,6 +162,7 @@ defmodule CodeInfoTest do
              ]
            }
 
+    assert info.doc_format == "application/erlang+html"
     assert info.doc_metadata.name == "module1"
     assert Map.keys(info.doc_metadata) == [:name, :otp_doc_vsn, :source, :types]
 
@@ -236,6 +238,7 @@ defmodule CodeInfoTest do
                  }
                },
                doc: :none,
+               doc_format: nil,
                doc_metadata: %{},
                functions: %{
                  {:function1, 0} => %{
