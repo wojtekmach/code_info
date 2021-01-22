@@ -29,6 +29,13 @@ defmodule CodeInfoTest do
         :ok
       end
 
+      @doc "function2 docs"
+      @spec function2(atom()) :: atom()
+      @spec function2(integer()) :: integer()
+      def function2(x) do
+        x
+      end
+
       @doc "macro1 docs"
       @spec macro1() :: :ok
       defmacro macro1() do
@@ -94,6 +101,16 @@ defmodule CodeInfoTest do
              spec_strings: ["function1() :: :ok"]
            }
 
+    assert Map.fetch!(info.functions, {:function2, 1}) == %{
+             doc: %{"en" => "function2 docs"},
+             doc_metadata: %{},
+             signature: ["function2(x)"],
+             spec_strings: [
+               "function2(atom()) :: atom()",
+               "function2(integer()) :: integer()"
+             ]
+           }
+
     assert Map.fetch!(info.macros, {:macro1, 0}) == %{
              doc: %{"en" => "macro1 docs"},
              doc_metadata: %{},
@@ -106,7 +123,7 @@ defmodule CodeInfoTest do
     erlc(:module1, ~S"""
     %% @doc module1 docs.
     -module(module1).
-    -export([function1/0]).
+    -export([function1/0, function2/1]).
     -export_type([type1/0]).
 
     -type type1() :: atom().
@@ -120,6 +137,12 @@ defmodule CodeInfoTest do
     -spec function1() -> atom().
     function1() ->
       ok.
+
+    %% @doc function2 docs.
+    -spec function2(atom()) -> atom();
+                   (integer()) -> integer().
+    function2(X) ->
+      X.
     """)
 
     edoc_to_chunk(:module1)
@@ -165,6 +188,23 @@ defmodule CodeInfoTest do
              doc_metadata: %{},
              signature: ["function1() -> atom()"],
              spec_strings: ["-spec function1() -> atom()."]
+           }
+
+    assert Map.fetch!(info.functions, {:function2, 1}) == %{
+             doc: %{"en" => [{:a, [id: "function2-1"], []}, {:p, [], ["function2 docs."]}]},
+             doc_metadata: %{},
+             signature: ["function2(X::integer()) -> integer()", "function2(X::atom()) -> atom()"],
+             # FIXME
+             # spec_strings: [
+             #   """
+             #   -spec function2(atom()) -> atom();
+             #                  (integer()) -> integer().\
+             #   """
+             # ]
+             spec_strings: [
+               "-spec function2(atom()) -> atom().",
+               "-spec function2(integer()) -> integer()."
+             ]
            }
   end
 
