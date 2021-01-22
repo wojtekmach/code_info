@@ -41,19 +41,9 @@ defmodule CodeInfo do
   def get(module, filter \\ :*) do
     {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} = Code.fetch_docs(module)
 
-    {:ok, types} = Code.Typespec.fetch_types(module)
-
-    types =
-      for {kind, {name, _, args} = spec} <- types,
-          into: %{} do
-        {{name, length(args)}, {kind, spec}}
-      end
-
-    {:ok, specs} = Code.Typespec.fetch_specs(module)
-    specs = Map.new(specs)
-
-    {:ok, callbacks} = Code.Typespec.fetch_callbacks(module)
-    callbacks = Map.new(callbacks)
+    types = fetch_types(module)
+    specs = fetch_specs(module)
+    callbacks = fetch_callbacks(module)
 
     state = %{
       types: %{},
@@ -69,33 +59,11 @@ defmodule CodeInfo do
       Enum.reduce(docs, state, fn {{kind, name, arity}, _anno, signature, doc, metadata}, acc ->
         case kind do
           :type ->
-            {kind, spec} = Map.fetch!(types, {name, arity})
-            spec_string = type_spec_to_string(spec)
-
-            map = %{
-              kind: kind,
-              doc: doc,
-              doc_metadata: metadata,
-              signature: signature,
-              spec_string: spec_string
-            }
-
+            map = type(types, name, arity, doc, metadata, signature)
             put_in(acc, [:types, {name, arity}], map)
 
           :callback ->
-            spec_strings =
-              case Map.fetch(callbacks, {name, arity}) do
-                {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
-                :error -> []
-              end
-
-            map = %{
-              doc: doc,
-              doc_metadata: metadata,
-              signature: signature,
-              spec_strings: spec_strings
-            }
-
+            map = callback(callbacks, name, arity, doc, metadata, signature)
             put_in(acc, [:callbacks, {name, arity}], map)
 
           :macrocallback ->
@@ -151,28 +119,10 @@ defmodule CodeInfo do
         end
       end)
 
-    typeps =
-      for {{name, arity}, {:typep, spec}} <- types,
-          into: %{} do
-        spec_string = type_spec_to_string(spec)
-
-        map = %{
-          kind: :typep,
-          doc: :none,
-          doc_metadata: %{},
-          signature: [],
-          spec_string: spec_string
-        }
-
-        {{name, arity}, map}
-      end
-
-    state =
-      Enum.reduce(typeps, state, fn {{name, arity}, map}, acc ->
-        put_in(acc, [:types, {name, arity}], map)
-      end)
-
-    filter(state, filter)
+    state
+    |> put_missing_types(types)
+    |> put_missing_callbacks(callbacks)
+    |> filter(filter)
   end
 
   defp filter(map, :*) do
@@ -194,6 +144,87 @@ defmodule CodeInfo do
           {key, map}
       end
     end
+  end
+
+  defp fetch_types(module) do
+    types =
+      case Code.Typespec.fetch_types(module) do
+        {:ok, types} -> types
+        :error -> []
+      end
+
+    for {kind, {name, _, args} = spec} <- types,
+        into: %{} do
+      {{name, length(args)}, {kind, spec}}
+    end
+  end
+
+  defp fetch_specs(module) do
+    case Code.Typespec.fetch_specs(module) do
+      {:ok, specs} -> Map.new(specs)
+      :error -> %{}
+    end
+  end
+
+  defp fetch_callbacks(module) do
+    case Code.Typespec.fetch_callbacks(module) do
+      {:ok, callbacks} -> Map.new(callbacks)
+      :error -> %{}
+    end
+  end
+
+  # Add types that are in Dbgi chunk but not in Docs chunk.
+  #
+  # There can be few reasons for this discrepancy:
+  # - Elixir doesn't put @typep into docs chunk
+  # - xml_from_edoc + docgen_xml_to_chunk doesn't put types into chunk
+  # - module may not have Docs chunk at all
+  defp put_missing_types(state, types) do
+    types =
+      Enum.reduce(Map.keys(types), state.types, fn {name, arity}, acc ->
+        map = type(types, name, arity, :none, %{}, [])
+        Map.put_new(acc, {name, arity}, map)
+      end)
+
+    put_in(state.types, types)
+  end
+
+  defp type(types, name, arity, doc, doc_metadata, signature) do
+    {kind, spec} = Map.fetch!(types, {name, arity})
+
+    %{
+      kind: kind,
+      doc: doc,
+      doc_metadata: doc_metadata,
+      signature: signature,
+      spec_string: type_spec_to_string(spec)
+    }
+  end
+
+  # Add callbacks that are in Dbgi chunk but not in Docs chunk (for edoc)
+  defp put_missing_callbacks(state, callbacks) do
+    callbacks =
+      Enum.reduce(Map.keys(callbacks), state.callbacks, fn {name, arity}, acc ->
+        map = callback(callbacks, name, arity, :none, %{}, [])
+        Map.put_new(acc, {name, arity}, map)
+      end)
+
+    put_in(state.callbacks, callbacks)
+  end
+
+  defp callback(callbacks, name, arity, doc, doc_metadata, signature) do
+    spec_strings =
+      case Map.fetch(callbacks, {name, arity}) do
+        {:ok, specs} -> Enum.map(specs, &function_spec_to_string(&1, name))
+        :error -> []
+      end
+
+    %{
+      doc: doc,
+      doc_metadata: doc_metadata,
+      signature: signature,
+      spec_strings: spec_strings
+    }
   end
 
   defp function_spec_to_string(spec, name) do

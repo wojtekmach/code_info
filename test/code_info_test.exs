@@ -1,8 +1,8 @@
 defmodule CodeInfoTest do
   use ExUnit.Case, async: true
 
-  test "get/2" do
-    c(~S"""
+  test "get/2: Elixir module" do
+    elixirc(~S"""
     defmodule M do
       @moduledoc "M docs"
 
@@ -102,15 +102,126 @@ defmodule CodeInfoTest do
            }
   end
 
-  defp c(code) do
+  test "get/2: Erlang module with chunk" do
+    erlc(:module1, ~S"""
+    %% @doc module1 docs.
+    -module(module1).
+    -export([function1/0]).
+    -export_type([type1/0]).
+
+    -type type1() :: atom().
+    %% type1 docs.
+
+    -callback callback1() -> atom().
+
+    %% @doc function1 docs.
+    -spec function1() -> atom().
+    function1() ->
+      ok.
+    """)
+
+    edoc_to_chunk(:module1)
+    info = CodeInfo.get(:module1)
+
+    assert info.doc == %{
+             "en" => [
+               {:p, [], ["module1 docs."]},
+               {:h2, [], ["DATA TYPES"]},
+               {:a, [id: "types"], []},
+               {:dl, [],
+                [
+                  {:dt, [], [{:a, [id: "type-type1"], []}, "type1() = atom()"]},
+                  {:dd, [], [{:p, [], []}, {:p, [], ["type1 docs."]}]}
+                ]}
+             ]
+           }
+
+    assert info.doc_metadata.name == "module1"
+    assert Map.keys(info.doc_metadata) == [:name, :otp_doc_vsn, :source, :types]
+
+    assert info.types == %{
+             {:type1, 0} => %{
+               doc: :none,
+               doc_metadata: %{},
+               kind: :type,
+               signature: [],
+               spec_string: "type1() :: atom()"
+             }
+           }
+
+    assert info.callbacks == %{
+             {:callback1, 0} => %{
+               doc: :none,
+               doc_metadata: %{},
+               signature: [],
+               spec_strings: ["callback1() :: atom()"]
+             }
+           }
+
+    assert Map.fetch!(info.functions, {:function1, 0}) == %{
+             doc: %{"en" => [{:a, [id: "function1-0"], []}, {:p, [], ["function1 docs."]}]},
+             doc_metadata: %{},
+             signature: ["function1() -> atom()"],
+             spec_strings: ["function1() :: atom()"]
+           }
+  end
+
+  defp elixirc(code) do
     [{module, bytecode}] = Code.compile_string(code)
-    beam_path = "#{module}.beam"
+    dir = tmp_dir(code)
+    beam_path = '#{dir}/#{module}.beam'
     File.write!(beam_path, bytecode)
+    true = :code.add_path(dir)
 
     on_exit(fn ->
       :code.purge(module)
       :code.delete(module)
-      File.rm!(beam_path)
+      File.rm_rf!(dir)
     end)
+
+    :ok
+  end
+
+  defp erlc(module, code) do
+    dir = tmp_dir(code)
+    source_path = Path.join(dir, '#{module}.erl') |> String.to_charlist()
+    File.write!(source_path, code)
+    {:ok, module} = :compile.file(source_path, [:debug_info, outdir: dir])
+    true = :code.add_path(dir)
+
+    on_exit(fn ->
+      :code.purge(module)
+      :code.delete(module)
+      File.rm_rf!(dir)
+    end)
+
+    :ok
+  end
+
+  defp edoc_to_chunk(module) do
+    source_path = module.module_info(:compile)[:source]
+    beam_path = :code.which(module)
+    dir = :filename.dirname(source_path)
+    xml_path = '#{dir}/#{module}.xml'
+    chunk_path = '#{dir}/#{module}.chunk'
+
+    docgen_dir = :code.lib_dir(:erl_docgen)
+    cmd!("escript #{docgen_dir}/priv/bin/xml_from_edoc.escript -dir #{dir} #{source_path}")
+
+    :docgen_xml_to_chunk.main(["app", xml_path, beam_path, "", chunk_path])
+    docs_chunk = File.read!(chunk_path)
+    {:ok, ^module, chunks} = :beam_lib.all_chunks(beam_path)
+    {:ok, beam} = :beam_lib.build_module([{'Docs', docs_chunk} | chunks])
+    File.write!(beam_path, beam)
+  end
+
+  defp tmp_dir(code) do
+    dir = Path.join("tmp", :crypto.hash(:sha256, code) |> Base.url_encode64(case: :lower))
+    File.mkdir_p!(dir)
+    String.to_charlist(dir)
+  end
+
+  defp cmd!(command) do
+    0 = Mix.shell().cmd(command)
   end
 end
