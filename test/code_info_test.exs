@@ -1,7 +1,7 @@
 defmodule CodeInfoTest do
   use ExUnit.Case, async: true
 
-  test "get/2: Elixir module" do
+  test "fetch/2: Elixir module" do
     elixirc(~S"""
     defmodule M do
       @moduledoc "M docs"
@@ -37,7 +37,7 @@ defmodule CodeInfoTest do
     end
     """)
 
-    info = CodeInfo.get(M)
+    {:ok, info} = CodeInfo.fetch(M)
 
     assert info.doc == %{"en" => "M docs"}
     assert info.doc_metadata == %{}
@@ -102,7 +102,7 @@ defmodule CodeInfoTest do
            }
   end
 
-  test "get/2: Erlang module with chunk" do
+  test "fetch/2: Erlang module with chunk" do
     erlc(:module1, ~S"""
     %% @doc module1 docs.
     -module(module1).
@@ -123,7 +123,7 @@ defmodule CodeInfoTest do
     """)
 
     edoc_to_chunk(:module1)
-    info = CodeInfo.get(:module1)
+    {:ok, info} = CodeInfo.fetch(:module1)
 
     assert info.doc == %{
              "en" => [
@@ -168,7 +168,7 @@ defmodule CodeInfoTest do
            }
   end
 
-  test "get/2: Erlang module without chunk" do
+  test "fetch/2: Erlang module without chunk" do
     erlc(:module2, ~S"""
     -module(module2).
     -export([function1/0]).
@@ -183,7 +183,7 @@ defmodule CodeInfoTest do
       ok.
     """)
 
-    info = CodeInfo.get(:module2)
+    {:ok, info} = CodeInfo.fetch(:module2)
 
     assert info ==
              %{
@@ -217,6 +217,10 @@ defmodule CodeInfoTest do
                  }
                }
              }
+  end
+
+  test "fetch/2: Unknown module" do
+    assert CodeInfo.fetch(Unknown) == {:error, :module_not_found}
   end
 
   defp elixirc(code) do

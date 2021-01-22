@@ -3,6 +3,13 @@ defmodule CodeInfo do
   Functions for getting information about modules.
   """
 
+  def get(module, filter \\ :*) do
+    case fetch(module, filter) do
+      {:ok, info} -> info
+      {:error, :module_not_found} -> nil
+    end
+  end
+
   @doc """
   Get info about a given module.
 
@@ -37,17 +44,22 @@ defmodule CodeInfo do
       }
 
   """
-  @spec get(module(), filter) :: map() when filter: :* | [atom() | {atom(), filter}]
-  def get(module, filter \\ :*) do
-    {doc, metadata, docs} =
-      case Code.fetch_docs(module) do
-        {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} ->
-          {doc, metadata, docs}
+  @spec fetch(module(), filter) :: {:ok, map()} | {:error, :module_not_found}
+        when filter: :* | [atom() | {atom(), filter}]
+  def fetch(module, filter \\ :*) do
+    case Code.fetch_docs(module) do
+      {:docs_v1, _anno, _language, _content_type, doc, metadata, docs} ->
+        {:ok, fetch(module, doc, metadata, docs, filter)}
 
-        {:error, :chunk_not_found} ->
-          {:none, %{}, []}
-      end
+      {:error, :chunk_not_found} ->
+        {:ok, fetch(module, :none, %{}, [], filter)}
 
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp fetch(module, doc, metadata, docs, filter) do
     types = fetch_types(module)
     specs = fetch_specs(module)
     callbacks = fetch_callbacks(module)
@@ -242,7 +254,7 @@ defmodule CodeInfo do
   # - module may not have Docs chunk at all
   defp put_missing_functions(state, module, specs) do
     functions =
-      if Code.ensure_loaded?(module) and function_exported?(module, :__info__, 1) do
+      if function_exported?(module, :__info__, 1) do
         # elixir_module.module_info(:exports) contains macros
         module.__info__(:functions)
       else
