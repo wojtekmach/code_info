@@ -51,22 +51,18 @@ defmodule CodeInfo.SpecAST do
   def to_string(ast, format_fun \\ nil)
 
   def to_string(ast, nil) do
-    ast |> Code.Typespec.type_to_quoted() |> Macro.to_string()
+    Macro.to_string(ast)
   end
 
   def to_string(ast, format_fun) do
-    quoted = Code.Typespec.type_to_quoted(ast)
-    {quoted, acc} = f(quoted)
-    string = Macro.to_string(quoted)
+    {ast, acc} = f(ast)
+    string = Macro.to_string(ast)
     init!(acc)
 
     Regex.replace(~r/_+/, string, fn _placeholder ->
       case pop!() do
-        {:name, name} ->
+        {:same, name} ->
           "#{name}"
-
-        {:var, var} ->
-          "#{var}"
 
         other ->
           format_fun.(other)
@@ -86,13 +82,26 @@ defmodule CodeInfo.SpecAST do
     head
   end
 
-  # treat spec _name_ as a special identifier
-  # so that we never call format_fun on it.
-  defp f(quoted) do
-    {ast, acc} = f(quoted, [])
-    [head | tail] = Enum.reverse(acc)
-    {:user_type, name, _arity} = head
-    {ast, [{:name, name} | tail]}
+  defp f(ast) do
+    {ast, acc} = f(ast, [])
+    acc = Enum.reverse(acc)
+    dont_process_fun_name(ast, acc)
+  end
+
+  defp dont_process_fun_name(ast, acc) do
+    [head | tail] = acc
+
+    case head do
+      # this is e.g. `f` in `f(a) :: a`,
+      # mark it as same (no processing)
+      {:user_type, name, _arity} ->
+        {ast, [{:same, name} | tail]}
+
+      # this is e.g. `+` in `a + b :: a`,
+      # skip it altogether
+      {:operator, _} ->
+        {ast, tail}
+    end
   end
 
   defp f(quoted, acc) do
@@ -103,28 +112,48 @@ defmodule CodeInfo.SpecAST do
       {:|, _, _} = ast, acc ->
         {ast, acc}
 
+      {:when, _, _} = ast, acc ->
+        {ast, acc}
+
+      {var, meta, context}, acc when is_atom(var) and is_atom(context) ->
+        ast = {placeholder(var), meta, context}
+        identifier = {:same, var}
+        {ast, [identifier | acc]}
+
       {{:., meta, [module, name]}, _, args}, acc ->
-        ast = {placeholder("#{inspect(module)}.#{name}"), meta, args}
+        module =
+          case module do
+            {:__aliases__, _, parts} -> Module.concat(parts)
+            module -> module
+          end
+
+        ast = {placeholder("#{module}.#{name}"), meta, args}
         identifier = {:remote_type, module, name, length(args)}
         {ast, [identifier | acc]}
 
-      {name, meta, args}, acc when is_atom(name) and is_list(args) ->
-        ast = {placeholder(name), meta, args}
+      {name, meta, args} = ast, acc when is_atom(name) and is_list(args) ->
         arity = length(args)
 
-        identifier =
-          cond do
-            basic_type?({name, arity}) ->
-              {:type, name, arity}
+        if operator?({name, arity}) do
+          identifier = {:operator, name}
+          {ast, [identifier | acc]}
+        else
+          ast = {placeholder(name), meta, args}
 
-            built_in_type?({name, arity}) ->
-              {:type, name, arity}
+          identifier =
+            cond do
+              basic_type?({name, arity}) ->
+                {:type, name, arity}
 
-            true ->
-              {:user_type, name, arity}
-          end
+              built_in_type?({name, arity}) ->
+                {:type, name, arity}
 
-        {ast, [identifier | acc]}
+              true ->
+                {:user_type, name, arity}
+            end
+
+          {ast, [identifier | acc]}
+        end
 
       other, acc ->
         {other, acc}
@@ -194,11 +223,24 @@ defmodule CodeInfo.SpecAST do
     timeout: 0
   ]
 
-  def basic_type?(type) do
+  unary = [:@, :+, :-, :!, :^, :not, :~~~, :&]
+
+  binary =
+    [:., :*, :/, :+, :-, :++, :--, :.., :<>, :+++, :---, :^^^, :in, :"not in"] ++
+      [:|>, :<<<, :>>>, :<<~, :~>>, :<~, :~>, :<~>, :<|>, :<, :>, :<=, :>=] ++
+      [:==, :!=, :=~, :===, :!==, :&&, :&&&, :and, :||, :|||, :or, :=]
+
+  @operators Enum.map(unary, &{&1, 1}) ++ Enum.map(binary, &{&1, 2})
+
+  defp basic_type?(type) do
     type in @basic_types
   end
 
-  def built_in_type?(type) do
+  defp built_in_type?(type) do
     type in @built_in_types
+  end
+
+  def operator?(type) do
+    type in @operators
   end
 end
