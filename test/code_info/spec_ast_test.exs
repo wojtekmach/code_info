@@ -6,7 +6,7 @@ defmodule CodeInfo.SpecASTTest do
     test "it works" do
       ast =
         quote do
-          t(a, b) :: Keyword.t(a) | priv(b) | atom()
+          t(a, b) :: Keyword.t(a) | priv(b) | atom() when a: atom()
         end
 
       f = fn
@@ -16,7 +16,7 @@ defmodule CodeInfo.SpecASTTest do
       end
 
       assert SpecAST.to_string(ast, f) ==
-               ~s{t(a, b) :: KEYWORD.T(a) | PRIV(b) | ATOM()}
+               ~s{t(a, b) :: KEYWORD.T(a) | PRIV(b) | ATOM() when a: ATOM()}
     end
 
     test "underscores" do
