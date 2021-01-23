@@ -4,7 +4,7 @@ defmodule CodeInfo.SpecAST do
   @doc ~S"""
   Converts AST into string.
 
-  `format_fun` allows formatting types. It can receive one of the
+  If set, `format_fun` allows formatting types. It can receive one of the
   following:
 
     * `{:type, name, arity}`
@@ -27,15 +27,44 @@ defmodule CodeInfo.SpecAST do
       end
 
   """
+  # Notes:
+  #
+  # We traverse the AST collecting identifiers (types and vars),
+  # we replace every one of them with a placeholder that has the
+  # same length.
+  #
+  # For example:
+  #
+  #   t(a) :: Keyword.t(a) | atom()
+  #
+  # becomes:
+  #
+  #   _(_) :: _________(_) | ____()
+  #
+  # but importantly we have collected the identifiers in order:
+  #
+  #   t, a, Keyword.t, a, atom
+  #
+  # Afterwards, we simply convert the placeholders back and pop
+  # from our collected identifiers. Variables stay as is but
+  # for types, we call the format_fun.
+  def to_string(ast, format_fun \\ nil)
+
+  def to_string(ast, nil) do
+    ast |> Code.Typespec.type_to_quoted() |> Macro.to_string()
+  end
+
   def to_string(ast, format_fun) do
     quoted = Code.Typespec.type_to_quoted(ast)
     {quoted, acc} = f(quoted)
-    acc = Enum.reverse(acc)
     string = Macro.to_string(quoted)
     init!(acc)
 
     Regex.replace(~r/_+/, string, fn _placeholder ->
       case pop!() do
+        {:name, name} ->
+          "#{name}"
+
         {:var, var} ->
           "#{var}"
 
@@ -57,14 +86,13 @@ defmodule CodeInfo.SpecAST do
     head
   end
 
+  # treat spec _name_ as a special identifier
+  # so that we never call format_fun on it.
   defp f(quoted) do
-    f(quoted, [])
-  end
-
-  defp f({:"::", meta1, [{name, meta2, args}, rhs]}, acc) do
-    {args, acc} = f(args, acc)
-    {rhs, acc} = f(rhs, acc)
-    {{:"::", meta1, [{name, meta2, args}, rhs]}, acc}
+    {ast, acc} = f(quoted, [])
+    [head | tail] = Enum.reverse(acc)
+    {:user_type, name, _arity} = head
+    {ast, [{:name, name} | tail]}
   end
 
   defp f(quoted, acc) do

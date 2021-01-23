@@ -21,7 +21,7 @@ defmodule CodeInfo.SpecASTTest do
       {:user_type, name, arity} ->
         url = "##{name}/#{arity}"
         text = name
-        ~s{<a href="#{url}">#{text}/a>}
+        ~s{<a href="#{url}">#{text}</a>}
 
       {:remote_type, module, name, arity} ->
         url = "#{inspect(module)}.html##{name}/#{arity}"
@@ -33,6 +33,6 @@ defmodule CodeInfo.SpecASTTest do
              ~s{t(a, b) :: Keyword.t(a) | priv(b) | atom()}
 
     assert SpecAST.to_string(ast, f) ==
-             ~s{t(a, b) :: <a href="Keyword.html#t/1">Keyword.t</a>(a) | <a href="#priv/1">priv/a>(b) | atom()}
+             ~s{t(a, b) :: <a href="Keyword.html#t/1">Keyword.t</a>(a) | <a href="#priv/1">priv</a>(b) | atom()}
   end
 end
