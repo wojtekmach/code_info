@@ -1,9 +1,32 @@
 defmodule CodeInfo.DocAST do
   @moduledoc false
 
+  @doc """
+  Parse given `doc` according to `doc_format`.
+  """
   def parse(doc, doc_format, options \\ [])
 
   def parse(markdown, "text/markdown", opts) do
+    parse_markdown(markdown, opts)
+  end
+
+  def parse(ast, "application/erlang+html", []) do
+    {:ok, parse_erl_ast(ast)}
+  end
+
+  @doc """
+  See `parse/3`.
+  """
+  def parse!(doc, doc_format, options \\ []) do
+    case parse(doc, doc_format, options) do
+      {:ok, ast} -> ast
+      {:error, exception} -> raise exception
+    end
+  end
+
+  ## markdown
+
+  defp parse_markdown(markdown, opts) do
     opts = [
       gfm: Keyword.get(opts, :gfm, true),
       line: Keyword.get(opts, :line, 1),
@@ -31,29 +54,17 @@ defmodule CodeInfo.DocAST do
     end
   end
 
-  def parse(erl_ast, "application/erlang+html", []) do
-    {:ok, from_erl_ast(erl_ast)}
-  end
+  ## erlang+html
 
-  defp from_erl_ast(binary) when is_binary(binary) do
+  defp parse_erl_ast(binary) when is_binary(binary) do
     binary
   end
 
-  defp from_erl_ast(list) when is_list(list) do
-    Enum.map(list, &from_erl_ast/1)
+  defp parse_erl_ast(list) when is_list(list) do
+    Enum.map(list, &parse_erl_ast/1)
   end
 
-  defp from_erl_ast({tag, attrs, content}) when is_atom(tag) do
-    {tag, attrs, from_erl_ast(content), %{}}
-  end
-
-  def parse!(doc, doc_format, options \\ []) do
-    case parse(doc, doc_format, options) do
-      {:ok, ast} ->
-        ast
-
-      {:error, exception} ->
-        raise exception
-    end
+  defp parse_erl_ast({tag, attrs, content}) when is_atom(tag) do
+    {tag, attrs, parse_erl_ast(content), %{}}
   end
 end
