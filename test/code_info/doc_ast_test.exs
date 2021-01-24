@@ -2,7 +2,7 @@ defmodule CodeInfo.DocASTTest do
   use ExUnit.Case, async: true
   alias CodeInfo.DocAST
 
-  describe "parse" do
+  describe "parse/3" do
     test "markdown" do
       markdown = """
       `String.upcase/1`
@@ -44,5 +44,23 @@ defmodule CodeInfo.DocASTTest do
                   ], %{}}
                ]
     end
+  end
+
+  test "to_string/2" do
+    markdown = """
+    foo `String.upcase/1` bar
+    """
+
+    ast = DocAST.parse!(markdown, "text/markdown")
+
+    f = fn
+      {"code", _, _, _}, string ->
+        String.upcase(string)
+
+      _ast, string ->
+        string
+    end
+
+    assert DocAST.to_string(ast, f) == "<p>foo <CODE>STRING.UPCASE/1</CODE> bar</p>"
   end
 end

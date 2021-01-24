@@ -24,6 +24,25 @@ defmodule CodeInfo.DocAST do
     end
   end
 
+  @doc """
+  Transform AST into string.
+  """
+  def to_string(ast, fun \\ fn _ast, string -> string end)
+
+  def to_string(binary, _fun) when is_binary(binary) do
+    binary
+  end
+
+  def to_string(list, fun) when is_list(list) do
+    result = Enum.map_join(list, "", &to_string(&1, fun))
+    fun.(list, result)
+  end
+
+  def to_string({tag, _attrs, inner, _meta} = ast, fun) do
+    result = "<#{tag}>" <> to_string(inner, fun) <> "</#{tag}>"
+    fun.(ast, result)
+  end
+
   ## markdown
 
   defp parse_markdown(markdown, opts) do
