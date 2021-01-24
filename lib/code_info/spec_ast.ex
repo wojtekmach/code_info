@@ -4,7 +4,7 @@ defmodule CodeInfo.SpecAST do
   @doc ~S"""
   Converts AST into string.
 
-  If set, `format_fun` allows formatting types. It can receive one of the
+  `format_fun`, if non-nil, allows formatting types. It can receive one of the
   following:
 
     * `{:type, name, arity}`
@@ -48,15 +48,24 @@ defmodule CodeInfo.SpecAST do
   # Afterwards, we simply convert the placeholders back and pop
   # from our collected identifiers. Variables stay as is but
   # for types, we call the format_fun.
-  def to_string(ast, format_fun \\ nil)
+  def to_string(ast, format_fun, formatter_options \\ [])
 
-  def to_string(ast, nil) do
-    Macro.to_string(ast)
+  def to_string(ast, nil, formatter_options) do
+    ast
+    |> Macro.to_string()
+    |> Code.format_string!(formatter_options)
+    |> IO.iodata_to_binary()
   end
 
-  def to_string(ast, format_fun) do
+  def to_string(ast, format_fun, formatter_options) do
     {ast, acc} = f(ast)
-    string = Macro.to_string(ast)
+
+    string =
+      ast
+      |> Macro.to_string()
+      |> Code.format_string!(formatter_options)
+      |> IO.iodata_to_binary()
+
     init!(acc)
 
     Regex.replace(~r/_+/, string, fn _placeholder ->

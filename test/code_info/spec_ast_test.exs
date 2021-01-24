@@ -2,7 +2,7 @@ defmodule CodeInfo.SpecASTTest do
   use ExUnit.Case, async: true
   alias CodeInfo.SpecAST
 
-  describe "to_string/2" do
+  describe "to_string/3" do
     test "it works" do
       ast =
         quote do
@@ -45,6 +45,23 @@ defmodule CodeInfo.SpecASTTest do
 
       assert SpecAST.to_string(ast, f) ==
                ~s{INTEGER() + FLOAT() :: FLOAT()}
+    end
+
+    test "formatter" do
+      ast =
+        quote do
+          f(super_long_variable_name, super_long_variable_name, super_long_type_name()) ::
+            super_long_type_name()
+        end
+
+      f = fn
+        {:user_type, name, 0} -> String.upcase("#{name}")
+      end
+
+      assert SpecAST.to_string(ast, f) == """
+             f(super_long_variable_name, super_long_variable_name, SUPER_LONG_TYPE_NAME()) ::
+               SUPER_LONG_TYPE_NAME()\
+             """
     end
   end
 end
