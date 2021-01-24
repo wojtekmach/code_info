@@ -130,12 +130,7 @@ defmodule CodeInfo.SpecAST do
         {ast, [identifier | acc]}
 
       {{:., meta, [module, name]}, _, args}, acc ->
-        module =
-          case module do
-            {:__aliases__, _, parts} -> Module.concat(parts)
-            module -> module
-          end
-
+        module = CodeInfo.Utils.module(module)
         ast = {placeholder("#{module}.#{name}"), meta, args}
         identifier = {:remote_type, module, name, length(args)}
         {ast, [identifier | acc]}

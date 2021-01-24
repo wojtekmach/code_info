@@ -77,7 +77,7 @@ defmodule CodeInfo.Language.Elixir do
           {:module, Module.concat(parts)}
 
         {:ok, {:/, _, [{{:., _, [module, name]}, _, []}, arity]}} when is_integer(arity) ->
-          {:function, {module(module), name, arity}}
+          {:function, {CodeInfo.Utils.module(module), name, arity}}
 
         {:ok, {:/, _, [{name, _, nil}, arity]}} when is_atom(name) and is_integer(arity) ->
           {:function, {name, arity}}
@@ -90,9 +90,6 @@ defmodule CodeInfo.Language.Elixir do
       end
     end
   end
-
-  defp module(atom) when is_atom(atom), do: atom
-  defp module({:__aliases__, _, parts}), do: Module.concat(parts)
 
   defp parse_mix_task(name) do
     name_re = ~r/[a-z]+[a-z][0-9]*/.source
